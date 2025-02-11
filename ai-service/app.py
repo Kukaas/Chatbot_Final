@@ -1,10 +1,21 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 import mysql.connector
 from sentence_transformers import SentenceTransformer
 import json
+from pydantic import BaseModel
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8001", "http://localhost:8001"],  # Add your frontend URLs
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Load the model
 model = SentenceTransformer('all-MiniLM-L6-v2')  # This is a lightweight model good for embeddings
@@ -23,9 +34,12 @@ def get_embedding(text):
     embedding = model.encode(text)
     return embedding.tolist()  # Convert numpy array to list for JSON serialization
 
+class SearchQuery(BaseModel):
+    query: str
+
 @app.post("/search")
-async def search(query: str):
-    query_embedding = get_embedding(query)
+async def search(query_data: SearchQuery):
+    query_embedding = get_embedding(query_data.query)
     
     # Get all embeddings from database
     cursor.execute("SELECT id, issue, solution, embedding FROM troubleshooting_guides")
