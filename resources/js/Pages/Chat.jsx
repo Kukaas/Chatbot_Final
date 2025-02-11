@@ -349,7 +349,7 @@ export default function Chat() {
                     {/* Chat Messages */}
                     <div 
                         ref={chatContainerRef}
-                        className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-[#1e2635]"
+                        className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[#1a202c]"
                     >
                         {messages.map(message => (
                             <div 
@@ -357,41 +357,78 @@ export default function Chat() {
                                 className={`flex flex-col ${message.type === 'user' ? 'items-end' : 'items-start'}`}
                             >
                                 <div className={`
-                                    max-w-[85%] rounded-lg py-2.5 px-4
+                                    max-w-[85%] rounded-lg py-3 px-4
                                     ${message.type === 'user' 
-                                        ? 'bg-blue-500 text-white' 
-                                        : 'bg-[#2a3343] text-gray-100'}
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-[#2d3748] text-gray-100 shadow-lg'}
                                 `}>
                                     {message.type === 'system' ? (
-                                        <div className="text-sm text-gray-400">
-                                            <div className="font-medium">{message.content.issue}</div>
+                                        <div className="text-sm text-gray-300">
+                                            <div className="font-medium mb-1">{message.content.issue}</div>
                                             <div>{message.content.solution}</div>
                                         </div>
                                     ) : message.type === 'ai' ? (
                                         typeof message.content === 'object' ? (
-                                            <div className="space-y-2">
-                                                <div className="font-semibold">{message.content.issue}</div>
-                                                {message.content.type === 'initial_response' && !expandedMessages.has(message.id) ? (
-                                                    <>
-                                                        <div className="text-gray-200">{message.content.options}</div>
-                                                        <button 
-                                                            onClick={() => handleExpandMessage(message.id)}
-                                                            className="text-blue-400 hover:text-blue-300 text-sm"
-                                                        >
-                                                            Show detailed solution
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <div className="text-gray-200 whitespace-pre-wrap">
-                                                        {message.content.solution}
-                                                    </div>
-                                                )}
+                                            <div className="space-y-3">
+                                                {/* Title/Understanding section */}
+                                                <div className="font-bold text-lg text-blue-300">
+                                                    {message.content.issue}
+                                                </div>
+                                                
+                                                {/* Key Points section */}
+                                                <div className="text-gray-200 leading-relaxed">
+                                                    {message.content.options.split('\n').map((line, index) => {
+                                                        const trimmedLine = line.trim();
+                                                        if (!trimmedLine) return null;
+                                                        
+                                                        // Check if it's a step (contains numbers or "Step")
+                                                        const isStep = /^\d+\.|\bStep\b/i.test(trimmedLine);
+                                                        
+                                                        // Check if it's a section header (ends with ':')
+                                                        const isHeader = trimmedLine.endsWith(':');
+                                                        
+                                                        // Remove any leading numbers or bullets
+                                                        const cleanedLine = trimmedLine.replace(/^[-\d.]+\s*/, '');
+                                                        
+                                                        return (
+                                                            <div key={index} className="flex items-start gap-2 mb-1">
+                                                                {!isHeader && (
+                                                                    <span className="text-blue-400 min-w-[20px] font-medium">
+                                                                        {isStep ? `${index + 1}.` : '•'}
+                                                                    </span>
+                                                                )}
+                                                                <span className={`${isHeader ? 'font-semibold text-blue-200 mt-2' : ''}`}>
+                                                                    {cleanedLine}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                
+                                                {/* Detailed Solution section */}
+                                                <div className="text-gray-200 leading-relaxed space-y-2 pl-4 border-l-2 border-blue-500/30">
+                                                    {message.content.solution.split('\n').map((line, index) => {
+                                                        const trimmedLine = line.trim();
+                                                        if (!trimmedLine) return null;
+                                                        
+                                                        // Check if it's a section header (ends with ':')
+                                                        const isHeader = trimmedLine.endsWith(':');
+                                                        
+                                                        return (
+                                                            <div key={index} className={`
+                                                                ${isHeader ? 'font-semibold text-blue-200 mt-4 mb-2' : ''}
+                                                            `}>
+                                                                {trimmedLine}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div className="text-sm">{message.content}</div>
+                                            <div className="text-sm leading-relaxed">{message.content}</div>
                                         )
                                     ) : (
-                                        <div className="text-sm">{message.content}</div>
+                                        <div className="text-sm leading-relaxed">{message.content}</div>
                                     )}
                                 </div>
                                 {message.type === 'ai' && showFeedback && message.responseId === currentResponseId && (

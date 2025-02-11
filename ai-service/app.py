@@ -43,7 +43,7 @@ embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:8000", "http://localhost:8000", 
-                  "http://127.0.0.1:8001", "http://localhost:8001"],  # Add both ports
+                  "http://127.0.0.1:8001", "http://localhost:8001"],  # Both ports already configured
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -520,28 +520,43 @@ async def search(query_data: SearchQuery):
                 {context}
 
                 Please create a comprehensive response that:
-                1. Combines insights from all sources
-                2. Incorporates successful elements from previous solutions
-                3. Addresses the specific user query
-                4. Provides clear, step-by-step instructions
+                1. Shows understanding of the issue
+                2. Lists key points in a structured way:
+                   - For step-by-step solutions, use numbered steps (1., 2., etc.)
+                   - For options or alternatives, use bullet points
+                3. Provides detailed solution
 
-                Format your response with ||| separators:
-                1. Brief understanding
-                2. Key points
-                3. Detailed solution
+                Format your response in exactly this structure:
+
+                Understanding: Brief statement showing you understand the user's issue
+
+                Key Points:
+                [List points here - use numbers for steps, bullets (-) for options]
+
+                Detailed Solution:
+                [Break down the solution into clear sections with numbered steps where appropriate]
                 """
 
                 response = gemini_model.generate_content(response_prompt)
-                sections = response.text.split('|||')
+                sections = response.text.split('\n\n')
 
-                if len(sections) >= 3:
-                    issue = sections[0].strip()
-                    options = sections[1].strip()
-                    solution = sections[2].strip()
-                else:
-                    issue = "Enhanced Solution"
-                    options = "Based on our knowledge base"
-                    solution = response.text
+                # Find the sections by their headers
+                issue = ""
+                options = ""
+                solution = ""
+
+                for section in sections:
+                    if section.startswith('Understanding:'):
+                        issue = section.replace('Understanding:', '').strip()
+                    elif section.startswith('Key Points:'):
+                        options = section.replace('Key Points:', '').strip()
+                    elif section.startswith('Detailed Solution:'):
+                        solution = section.replace('Detailed Solution:', '').strip()
+
+                if not all([issue, options, solution]):
+                    issue = "Tech Support Response"
+                    options = "Here are the steps to help you:"
+                    solution = response.text.strip()
 
                 # Store the enhanced response
                 new_embedding = get_embedding(query_data.query + " " + issue + " " + solution)
@@ -577,22 +592,41 @@ async def search(query_data: SearchQuery):
                 Previous conversation context:
                 {context}
                 
-                Please provide a helpful response in the following format:
-                1. Brief understanding of the issue
-                2. Key troubleshooting steps
-                3. Detailed solution
-                
-                Use ||| as separators between sections.
+                Please provide a helpful response in exactly this structure:
+
+                Understanding: Write a brief statement showing you understand the user's issue
+
+                Key Points:
+                - For step-by-step instructions, use numbered steps (1., 2., etc.)
+                - For troubleshooting options, use bullet points (-)
+                - Keep each point clear and concise
+
+                Detailed Solution:
+                Provide a detailed explanation that expands on the key points
+
+                Remember:
+                - Use numbered steps (1., 2., etc.) for sequential instructions
+                - Use bullet points (-) for non-sequential options or alternatives
+                - Keep formatting consistent and clean
                 """
                 
                 response = gemini_model.generate_content(prompt)
-                sections = response.text.split('|||')
+                sections = response.text.split('\n\n')
                 
-                if len(sections) >= 3:
-                    issue = sections[0].strip()
-                    options = sections[1].strip()
-                    solution = sections[2].strip()
-                else:
+                # Find the sections by their headers
+                issue = ""
+                options = ""
+                solution = ""
+
+                for section in sections:
+                    if section.startswith('Understanding:'):
+                        issue = section.replace('Understanding:', '').strip()
+                    elif section.startswith('Key Points:'):
+                        options = section.replace('Key Points:', '').strip()
+                    elif section.startswith('Detailed Solution:'):
+                        solution = section.replace('Detailed Solution:', '').strip()
+
+                if not all([issue, options, solution]):
                     issue = "Tech Support Response"
                     options = "Here are the steps to help you:"
                     solution = response.text.strip()
