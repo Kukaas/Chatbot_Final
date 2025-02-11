@@ -12,6 +12,15 @@ from contextlib import contextmanager
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 import re
+from patterns import (
+    FOLLOW_UP_PATTERNS,
+    IMPORTANT_KEYWORDS,
+    TECH_CATEGORIES,
+    MISSPELLINGS,
+    PROBLEM_INDICATORS,
+    QUESTION_INDICATORS,
+    TROUBLESHOOTING_KEYWORDS
+)
 
 # Load environment variables
 load_dotenv()
@@ -80,35 +89,8 @@ def get_embedding(text):
 
 def clean_and_normalize_text(text: str) -> str:
     """Clean and normalize text for better matching"""
-    # Common misspellings dictionary
-    misspellings = {
-        'overhiting': 'overheating',
-        'overheat': 'overheating',
-        'overheated': 'overheating',
-        'heating': 'overheating',
-        'hot': 'overheating',
-        'temperature': 'overheating',
-        'wifi': 'wireless network',
-        'wi-fi': 'wireless network',
-        'wireless': 'wireless network',
-        'internet': 'network connection',
-        'net': 'network connection',
-        'connection': 'network connection',
-        'router': 'network device',
-        'modem': 'network device',
-        'signal': 'network signal',
-        'weak': 'poor connection',
-        'slow': 'poor performance',
-        'disconnect': 'connection loss',
-        'dropped': 'connection loss',
-        'password': 'network credentials',
-        'wpa': 'network security',
-        'wep': 'network security',
-    }
-    
-    # Convert to lowercase and remove special characters
+    # Use imported MISSPELLINGS dictionary
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text.lower())
-    # Remove extra whitespace
     text = ' '.join(text.split())
     
     # Replace known misspellings only if they appear as whole words
@@ -116,9 +98,9 @@ def clean_and_normalize_text(text: str) -> str:
     normalized_words = []
     for word in words:
         # Only replace if it's an exact match or very close match
-        best_match = process.extractOne(word, misspellings.keys())
+        best_match = process.extractOne(word, MISSPELLINGS.keys())
         if best_match and best_match[1] >= 90:  # Increase threshold to 90%
-            normalized_words.append(misspellings[best_match[0]])
+            normalized_words.append(MISSPELLINGS[best_match[0]])
         else:
             normalized_words.append(word)
     
@@ -139,25 +121,11 @@ def analyze_question(query: str) -> dict:
     # Clean and normalize the query
     query_lower = clean_and_normalize_text(query)
     
-    # Define categories and their keywords with common misspellings
-    categories = {
-        'wifi': ['wifi', 'wireless', 'router', 'network', 'connection', 'internet', 
-                'wifi', 'wi-fi', 'wiifi', 'wirless', 'ruter', 'conection', 'inet'],
-        'data': ['data', 'mobile data', 'cellular', '4g', '5g', 'signal', 
-                'mobil', 'celular', 'signals', 'mobiledata', 'cell'],
-        'login': ['login', 'password', 'account', 'username', 'sign in', 
-                'signin', 'loging', 'passwd', 'user', 'credentials', 'pwd'],
-        'hardware': ['device', 'phone', 'computer', 'laptop', 'screen', 'battery',
-                    'fone', 'compter', 'labtop', 'devise', 'batery'],
-        'software': ['app', 'application', 'program', 'software', 'system',
-                    'aplication', 'progam', 'sofware', 'sistm']
-    }
-    
-    # Find matching categories using fuzzy matching
+    # Use imported TECH_CATEGORIES
     matched_categories = []
     words = query_lower.split()
     
-    for category, keywords in categories.items():
+    for category, keywords in TECH_CATEGORIES.items():
         # Check each word in the query against the keywords
         for word in words:
             # Use fuzzy matching to find similar words
@@ -166,22 +134,10 @@ def analyze_question(query: str) -> dict:
                 matched_categories.append(category)
                 break
     
-    # Common misspellings for problem indicators
-    problem_indicators = [
-        'issue', 'problem', 'error', 'not working', 'failed', 'help',
-        'isue', 'problm', 'eror', 'notworking', 'faild', 'halp', 'hlp',
-        'trouble', 'truble', 'fix', 'broken', 'brokn', 'stuck', 'stuk'
-    ]
-    
-    question_indicators = [
-        'how', 'what', 'why', 'where', 'when', 'can', 'could',
-        'hw', 'wut', 'wy', 'wher', 'wen', 'cn', 'cud'
-    ]
-    
     return {
         'categories': matched_categories,
-        'is_question': any(fuzz.partial_ratio(q, query_lower) >= 75 for q in question_indicators),
-        'is_problem_statement': any(fuzz.partial_ratio(p, query_lower) >= 75 for p in problem_indicators),
+        'is_question': any(fuzz.partial_ratio(q, query_lower) >= 75 for q in QUESTION_INDICATORS),
+        'is_problem_statement': any(fuzz.partial_ratio(p, query_lower) >= 75 for p in PROBLEM_INDICATORS),
         'normalized_query': query_lower
     }
 
@@ -193,22 +149,8 @@ def is_troubleshooting_query(query: str, conversation_history: list = None) -> b
     if conversation_history and len(conversation_history) > 0:
         return True
         
-    # List of troubleshooting-related keywords with common misspellings
-    troubleshooting_keywords = [
-        'error', 'eror', 'err',
-        'issue', 'isue', 'prob',
-        'problem', 'problm', 'trouble',
-        'fix', 'help', 'halp',
-        'not working', 'notworking', 'broken',
-        'failed', 'faild', 'stuck',
-        'crash', 'crashd', 'bug',
-        'debug', 'cant', 'cannot',
-        'wont', 'doesnt', 'frozen',
-        'slow', 'connection', 'conectn'
-    ]
-    
-    # Use fuzzy matching for each keyword
-    return any(fuzz.partial_ratio(keyword, query_lower) >= 75 for keyword in troubleshooting_keywords)
+    # Use imported TROUBLESHOOTING_KEYWORDS
+    return any(fuzz.partial_ratio(keyword, query_lower) >= 75 for keyword in TROUBLESHOOTING_KEYWORDS)
 
 def analyze_database_solutions(cursor, query_embedding, category):
     """Analyze database solutions to provide alternative approaches"""
@@ -256,26 +198,49 @@ def is_follow_up_question(query: str, conversation_history: list) -> tuple:
     
     # If there's no real history, it can't be a follow-up
     if len(actual_history) < 2:
-        return False, False
+        return False, False, None
         
-    follow_up_indicators = [
-        "still", "not working", "didn't work", "doesn't work",
-        "another", "else", "other", "more", "again", "alternative",
-        "what about", "how about", "then", "after that",
-        "try something else", "different solution", "new solution"
-    ]
     query_lower = query.lower()
     
-    # Check if the user is explicitly requesting an alternative
+    # Check the type of follow-up
+    follow_up_type = None
+    for ftype, patterns in FOLLOW_UP_PATTERNS.items():
+        if any(pattern in query_lower for pattern in patterns):
+            follow_up_type = ftype
+            break
+    
+    # Get the last conversation topic
+    last_topic = actual_history[-1] if actual_history else ""
+    
+    # Check for topic continuity
+    topic_words = set(clean_and_normalize_text(last_topic).split())
+    query_words = set(clean_and_normalize_text(query_lower).split())
+    has_topic_overlap = bool(topic_words & query_words)
+    
+    # Determine if it's a request for alternative solution
     is_alternative_request = any(phrase in query_lower for phrase in [
         "alternative", "another solution", "something else", 
         "different", "other way", "new solution"
     ])
     
-    # Check if the query contains follow-up indicators
-    is_follow_up = any(indicator in query_lower for indicator in follow_up_indicators)
+    # If it's a very short response and there's recent context, treat as follow-up
+    is_short_response = len(query_words) <= 3
     
-    return is_follow_up, is_alternative_request
+    is_follow_up = bool(
+        follow_up_type or 
+        has_topic_overlap or 
+        (is_short_response and actual_history)
+    )
+    
+    print(f"[DEBUG] Follow-up analysis:")
+    print(f"  Query: {query}")
+    print(f"  Follow-up type: {follow_up_type}")
+    print(f"  Topic overlap: {has_topic_overlap}")
+    print(f"  Is short response: {is_short_response}")
+    print(f"  Is alternative request: {is_alternative_request}")
+    print(f"  Is follow-up: {is_follow_up}")
+    
+    return is_follow_up, is_alternative_request, follow_up_type
 
 def calculate_similarity(embedding1, embedding2, query_text=None, match_text=None, effectiveness_score=1.0):
     """Calculate cosine similarity between two embeddings, weighted by effectiveness"""
@@ -299,32 +264,10 @@ def calculate_similarity(embedding1, embedding2, query_text=None, match_text=Non
         query_keywords = set(normalized_query.split())
         match_keywords = set(normalized_match.split())
         
-        # Keywords grouped by category for better matching
-        important_keywords = {
-            # Network related
-            'wireless', 'network', 'wifi', 'connection', 'internet', 
-            'router', 'modem', 'signal', 'connectivity',
-            # Hardware related
-            'hardware', 'device', 'computer', 'laptop', 'desktop',
-            'screen', 'display', 'keyboard', 'mouse', 'battery',
-            'power', 'charging', 'usb', 'port', 'cable',
-            # Software related
-            'software', 'program', 'application', 'app', 'windows',
-            'mac', 'update', 'install', 'driver', 'system',
-            # Performance related
-            'slow', 'fast', 'speed', 'performance', 'memory',
-            'ram', 'cpu', 'processor', 'disk', 'storage',
-            # Error related
-            'error', 'issue', 'problem', 'fail', 'crash',
-            'freeze', 'hang', 'stop', 'break', 'bug',
-            # Status words
-            'not', 'working', 'broken', 'failed', 'dead',
-            'stuck', 'frozen', 'crashed', 'slow', 'overheating'
-        }
-        
+        # Use imported IMPORTANT_KEYWORDS
         # Calculate keyword overlap with extra weight for important keywords
         common_keywords = query_keywords & match_keywords
-        important_matches = len(common_keywords & important_keywords)
+        important_matches = len(common_keywords & IMPORTANT_KEYWORDS)
         
         # Calculate category-based relevance
         keyword_similarity = (len(common_keywords) + important_matches * 2) / (len(query_keywords) + len(match_keywords))
@@ -354,7 +297,7 @@ def calculate_similarity(embedding1, embedding2, query_text=None, match_text=Non
         print(f"  - Combined similarity: {combined_similarity:.3f}")
         print(f"  - Final weighted similarity: {weighted_similarity:.3f}")
         print(f"  - Common keywords: {common_keywords}")
-        print(f"  - Important matches: {common_keywords & important_keywords}")
+        print(f"  - Important matches: {common_keywords & IMPORTANT_KEYWORDS}")
     
     return weighted_similarity
 
@@ -390,6 +333,84 @@ def get_conversation_context(cursor, conversation_history):
 async def search(query_data: SearchQuery):
     try:
         print(f"\n[DEBUG] Processing query: {query_data.query}")
+        
+        # Check if this is a follow-up question
+        is_follow_up, is_alternative, follow_up_type = is_follow_up_question(
+            query_data.query, 
+            query_data.conversation_history
+        )
+        
+        # Modify the prompt based on the type of follow-up
+        if is_follow_up:
+            context_prompt = f"""
+            Previous conversation:
+            {query_data.conversation_history[-2:]}
+            
+            User's current response: "{query_data.query}"
+            """
+            
+            if follow_up_type:
+                context_prompt += f"\nThis appears to be a {follow_up_type} type follow-up."
+                
+                if follow_up_type == 'confirmation':
+                    context_prompt += "\nUser is confirming or denying previous solution. Adjust your response accordingly."
+                elif follow_up_type == 'clarification':
+                    context_prompt += "\nUser needs clarification. Provide more detailed explanation."
+                elif follow_up_type == 'problem_persistence':
+                    context_prompt += "\nPrevious solution didn't resolve the issue. Offer alternative approaches."
+            else:
+                context_prompt += "\nThis appears to be related to the previous conversation."
+            
+            # Update the response prompt to be more contextual
+            response_prompt = f"""
+            You are a friendly tech support assistant in an ongoing conversation.
+            {context_prompt}
+            
+            Please respond naturally, maintaining conversation flow. Your response should:
+            1. Acknowledge their follow-up
+            2. Address their specific concern
+            3. Provide relevant information or solutions
+            4. End with a question to check if they need more help
+
+            Format your response exactly like this:
+            
+            Understanding: Brief acknowledgment showing you understand their follow-up
+            
+            Key Points:
+            [List relevant points conversationally]
+            
+            Solution & Next Steps:
+            [Provide solution in a friendly way]
+            
+            Follow-up:
+            [Ask if this helps or if they need more details]
+            """
+        else:
+            # Use the existing prompt for new questions
+            response_prompt = f"""
+            You are a friendly tech support assistant having a conversation with a user.
+            User has asked: "{query_data.query}"
+            
+            Please respond in a conversational, empathetic way. Your response should:
+            1. Show you understand their concern
+            2. Ask clarifying questions if needed
+            3. Provide solutions in a friendly way
+            4. End with a follow-up question to check if they need more help
+
+            Format your response exactly like this:
+            
+            Understanding: Brief acknowledgment of their issue in a conversational tone
+            
+            Key Points:
+            [List relevant information or solutions - use bullet points]
+            
+            Solution & Next Steps:
+            [Provide solution in a friendly way]
+            
+            Follow-up:
+            [Ask if this helps or if they need more clarification]
+            """
+
         normalized_query = clean_and_normalize_text(query_data.query)
         query_embedding = get_embedding(normalized_query)
         
@@ -513,30 +534,6 @@ async def search(query_data: SearchQuery):
                     context += best_source['feedback']
 
                 # Generate enhanced response using Gemini
-                response_prompt = f"""
-                You are a tech support assistant. A user has asked: "{query_data.query}"
-
-                We have found relevant information from our database:
-                {context}
-
-                Please create a comprehensive response that:
-                1. Shows understanding of the issue
-                2. Lists key points in a structured way:
-                   - For step-by-step solutions, use numbered steps (1., 2., etc.)
-                   - For options or alternatives, use bullet points
-                3. Provides detailed solution
-
-                Format your response in exactly this structure:
-
-                Understanding: Brief statement showing you understand the user's issue
-
-                Key Points:
-                [List points here - use numbers for steps, bullets (-) for options]
-
-                Detailed Solution:
-                [Break down the solution into clear sections with numbered steps where appropriate]
-                """
-
                 response = gemini_model.generate_content(response_prompt)
                 sections = response.text.split('\n\n')
 
@@ -550,8 +547,8 @@ async def search(query_data: SearchQuery):
                         issue = section.replace('Understanding:', '').strip()
                     elif section.startswith('Key Points:'):
                         options = section.replace('Key Points:', '').strip()
-                    elif section.startswith('Detailed Solution:'):
-                        solution = section.replace('Detailed Solution:', '').strip()
+                    elif section.startswith('Solution & Next Steps:'):
+                        solution = section.replace('Solution & Next Steps:', '').strip()
 
                 if not all([issue, options, solution]):
                     issue = "Tech Support Response"
@@ -587,27 +584,30 @@ async def search(query_data: SearchQuery):
                 
                 # Prepare prompt for Gemini
                 prompt = f"""
-                You are a tech support assistant. A user has asked: "{query_data.query}"
-                
+                You are a friendly tech support assistant having a conversation with a user.
+                User has asked: "{query_data.query}"
+
                 Previous conversation context:
                 {context}
-                
-                Please provide a helpful response in exactly this structure:
 
-                Understanding: Write a brief statement showing you understand the user's issue
+                Please respond in a natural, conversational way that:
+                1. Shows empathy and understanding
+                2. Asks for clarification if needed
+                3. Provides clear solutions
+                4. Always ends with a follow-up question
+
+                Format your response exactly like this:
+
+                Understanding: Acknowledge their issue conversationally
 
                 Key Points:
-                - For step-by-step instructions, use numbered steps (1., 2., etc.)
-                - For troubleshooting options, use bullet points (-)
-                - Keep each point clear and concise
+                [List relevant points in a friendly way]
 
-                Detailed Solution:
-                Provide a detailed explanation that expands on the key points
+                Solution & Next Steps:
+                [Explain the solution conversationally]
 
-                Remember:
-                - Use numbered steps (1., 2., etc.) for sequential instructions
-                - Use bullet points (-) for non-sequential options or alternatives
-                - Keep formatting consistent and clean
+                Follow-up:
+                [Ask if this helps or if they need more details]
                 """
                 
                 response = gemini_model.generate_content(prompt)
@@ -623,8 +623,8 @@ async def search(query_data: SearchQuery):
                         issue = section.replace('Understanding:', '').strip()
                     elif section.startswith('Key Points:'):
                         options = section.replace('Key Points:', '').strip()
-                    elif section.startswith('Detailed Solution:'):
-                        solution = section.replace('Detailed Solution:', '').strip()
+                    elif section.startswith('Solution & Next Steps:'):
+                        solution = section.replace('Solution & Next Steps:', '').strip()
 
                 if not all([issue, options, solution]):
                     issue = "Tech Support Response"
@@ -656,7 +656,13 @@ async def search(query_data: SearchQuery):
 
     except Exception as e:
         print(f"[DEBUG] Error occurred: {str(e)}")
-        error_response = {"error": f"An error occurred: {str(e)}"}
+        error_response = {
+            "issue": "Error Processing Request",
+            "options": "An error occurred while processing your request.",
+            "solution": f"Technical Details:\n• {str(e)}\n\nFollow-up: Would you like to try rephrasing your question?",
+            "type": "error",
+            "source": "error"
+        }
         
         # Store error responses too
         with get_db_cursor() as (cursor, db):

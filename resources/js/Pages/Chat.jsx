@@ -8,9 +8,9 @@ export default function Chat() {
             id: 1,
             type: 'ai',
             content: {
-                issue: "Hello! I'm your Tech Support AI Assistant.",
-                options: "How can I help you today?",
-                solution: "I can help you with:\n• Technical problems and troubleshooting\n• Network and connectivity issues\n• Software and hardware problems\n• System errors and configurations",
+                issue: "Hi there! I'm your friendly Tech Support Assistant.",
+                options: "I'm here to help you with any technical issues you're experiencing.",
+                solution: "I can assist with:\n• Technical problems and troubleshooting\n• Network and connectivity issues\n• Software and hardware problems\n• System errors and configurations\n\nFollow-up: What kind of help do you need today?",
                 type: "greeting"
             }
         }
@@ -91,14 +91,24 @@ export default function Chat() {
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     type: 'ai',
-                    content: data.error
+                    content: {
+                        issue: "Error Processing Request",
+                        options: "An error occurred while processing your request.",
+                        solution: data.error,
+                        type: "error"
+                    }
                 }]);
             } else {
                 const responseId = data.response_id || null;
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     type: 'ai',
-                    content: data,
+                    content: {
+                        issue: data.issue || "Tech Support Response",
+                        options: data.options || "",
+                        solution: data.solution || "I apologize, but I couldn't process that properly. Could you rephrase your question?",
+                        type: data.type || "response"
+                    },
                     responseId: responseId
                 }]);
                 if (responseId) {
@@ -368,65 +378,51 @@ export default function Chat() {
                                             <div>{message.content.solution}</div>
                                         </div>
                                     ) : message.type === 'ai' ? (
-                                        typeof message.content === 'object' ? (
-                                            <div className="space-y-3">
-                                                {/* Title/Understanding section */}
-                                                <div className="font-bold text-lg text-blue-300">
-                                                    {message.content.issue}
-                                                </div>
-                                                
-                                                {/* Key Points section */}
-                                                <div className="text-gray-200 leading-relaxed">
-                                                    {message.content.options.split('\n').map((line, index) => {
-                                                        const trimmedLine = line.trim();
-                                                        if (!trimmedLine) return null;
-                                                        
-                                                        // Check if it's a step (contains numbers or "Step")
-                                                        const isStep = /^\d+\.|\bStep\b/i.test(trimmedLine);
-                                                        
-                                                        // Check if it's a section header (ends with ':')
-                                                        const isHeader = trimmedLine.endsWith(':');
-                                                        
-                                                        // Remove any leading numbers or bullets
-                                                        const cleanedLine = trimmedLine.replace(/^[-\d.]+\s*/, '');
-                                                        
-                                                        return (
-                                                            <div key={index} className="flex items-start gap-2 mb-1">
-                                                                {!isHeader && (
-                                                                    <span className="text-blue-400 min-w-[20px] font-medium">
-                                                                        {isStep ? `${index + 1}.` : '•'}
-                                                                    </span>
-                                                                )}
-                                                                <span className={`${isHeader ? 'font-semibold text-blue-200 mt-2' : ''}`}>
-                                                                    {cleanedLine}
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                
-                                                {/* Detailed Solution section */}
-                                                <div className="text-gray-200 leading-relaxed space-y-2 pl-4 border-l-2 border-blue-500/30">
-                                                    {message.content.solution.split('\n').map((line, index) => {
-                                                        const trimmedLine = line.trim();
-                                                        if (!trimmedLine) return null;
-                                                        
-                                                        // Check if it's a section header (ends with ':')
-                                                        const isHeader = trimmedLine.endsWith(':');
-                                                        
-                                                        return (
-                                                            <div key={index} className={`
-                                                                ${isHeader ? 'font-semibold text-blue-200 mt-4 mb-2' : ''}
-                                                            `}>
-                                                                {trimmedLine}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                        <div className="space-y-3">
+                                            {/* Understanding section */}
+                                            <div className="font-medium text-blue-300">
+                                                {message.content.issue}
                                             </div>
-                                        ) : (
-                                            <div className="text-sm leading-relaxed">{message.content}</div>
-                                        )
+                                            
+                                            {/* Key Points section */}
+                                            <div className="text-gray-200 leading-relaxed">
+                                                {(message.content.options || "").split('\n').map((line, index) => {
+                                                    const trimmedLine = line.trim();
+                                                    if (!trimmedLine) return null;
+                                                    
+                                                    // Check if it's a section header
+                                                    const isHeader = trimmedLine.endsWith(':');
+                                                    
+                                                    return (
+                                                        <div key={index} className="flex items-start gap-2 mb-1">
+                                                            {!isHeader && (
+                                                                <span className="text-blue-400 min-w-[20px]">•</span>
+                                                            )}
+                                                            <span className={`${isHeader ? 'font-semibold text-blue-200 mt-2' : ''}`}>
+                                                                {trimmedLine}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            
+                                            {/* Solution and Follow-up sections */}
+                                            <div className="text-gray-200 leading-relaxed space-y-2">
+                                                {(message.content.solution || "").split('\n').map((line, index) => {
+                                                    const trimmedLine = line.trim();
+                                                    if (!trimmedLine) return null;
+                                                    
+                                                    // Check if it's the follow-up section
+                                                    const isFollowUp = trimmedLine.startsWith('Follow-up:');
+                                                    
+                                                    return (
+                                                        <div key={index} className={`${isFollowUp ? 'mt-4 text-blue-300 italic' : ''}`}>
+                                                            {trimmedLine}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div className="text-sm leading-relaxed">{message.content}</div>
                                     )}
