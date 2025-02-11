@@ -7,7 +7,12 @@ export default function Chat() {
         {
             id: 1,
             type: 'ai',
-            content: "Hello! I'm your Tech Support AI Assistant. How can I help you today?"
+            content: {
+                issue: "Hello! I'm your Tech Support AI Assistant.",
+                options: "How can I help you today?",
+                solution: "I can help you with:\n• Technical problems and troubleshooting\n• Network and connectivity issues\n• Software and hardware problems\n• System errors and configurations",
+                type: "greeting"
+            }
         }
     ]);
     const [newMessage, setNewMessage] = useState('');
@@ -16,6 +21,8 @@ export default function Chat() {
     const [showDebug, setShowDebug] = useState(false);
     const [debugInfo, setDebugInfo] = useState(null);
     const chatContainerRef = useRef(null);
+    const [expandedMessages, setExpandedMessages] = useState(new Set());
+    const [conversationHistory, setConversationHistory] = useState([]);
 
     const scrollToBottom = () => {
         if (chatContainerRef.current) {
@@ -31,7 +38,11 @@ export default function Chat() {
         e.preventDefault();
         if (!newMessage.trim()) return;
 
-        // Add user message
+        // Add user message to conversation history
+        const updatedHistory = [...conversationHistory, newMessage];
+        setConversationHistory(updatedHistory);
+
+        // Add user message to chat
         setMessages(prev => [...prev, {
             id: Date.now(),
             type: 'user',
@@ -50,10 +61,18 @@ export default function Chat() {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({ query: userMessage })
+                body: JSON.stringify({ 
+                    query: userMessage,
+                    conversation_history: updatedHistory 
+                })
             });
 
             const data = await response.json();
+            
+            // Add AI response to conversation history
+            if (data.solution) {
+                setConversationHistory(prev => [...prev, data.solution]);
+            }
 
             // Create debug info
             let debugText = '';
@@ -89,6 +108,14 @@ export default function Chat() {
         } finally {
             setIsTyping(false);
         }
+    };
+
+    const handleExpandMessage = (messageId) => {
+        setExpandedMessages(prev => {
+            const newSet = new Set(prev);
+            newSet.add(messageId);
+            return newSet;
+        });
     };
 
     return (
@@ -165,11 +192,27 @@ export default function Chat() {
                                         ? 'bg-blue-500 text-white' 
                                         : 'bg-[#2a3343] text-gray-100'}
                                 `}>
-                                    {message.type === 'ai' && message.content.issue ? (
-                                        <>
-                                            <div className="font-semibold">{message.content.issue}</div>
-                                            <div className="mt-1 text-gray-200">{message.content.solution}</div>
-                                        </>
+                                    {message.type === 'ai' ? (
+                                        typeof message.content === 'object' ? (
+                                            <>
+                                                <div className="font-semibold">{message.content.issue}</div>
+                                                {message.content.type === 'initial_response' && !expandedMessages.has(message.id) ? (
+                                                    <>
+                                                        <div className="mt-2 text-gray-200">{message.content.options}</div>
+                                                        <button 
+                                                            onClick={() => handleExpandMessage(message.id)}
+                                                            className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+                                                        >
+                                                            Show detailed solution
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <div className="mt-1 text-gray-200">{message.content.solution}</div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="text-sm">{message.content}</div>
+                                        )
                                     ) : (
                                         <div className="text-sm">{message.content}</div>
                                     )}
