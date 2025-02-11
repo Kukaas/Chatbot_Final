@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faComment, faPaperPlane, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { faComment, faPaperPlane, faTimes, faCode } from '@fortawesome/free-solid-svg-icons';
 
 export default function Chat() {
     const [messages, setMessages] = useState([
@@ -13,6 +13,8 @@ export default function Chat() {
     const [newMessage, setNewMessage] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [showDebug, setShowDebug] = useState(false);
+    const [debugInfo, setDebugInfo] = useState(null);
     const chatContainerRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -39,6 +41,7 @@ export default function Chat() {
         const userMessage = newMessage;
         setNewMessage('');
         setIsTyping(true);
+        setDebugInfo(null);
 
         try {
             const response = await fetch('http://127.0.0.1:8000/search', {
@@ -52,12 +55,22 @@ export default function Chat() {
 
             const data = await response.json();
 
-            // Check if the response contains an error
+            // Create debug info
+            let debugText = '';
+            if (data.source === 'database') {
+                debugText = `Source: Database Guide\nSimilarity Score: ${(data.similarity * 100).toFixed(1)}%`;
+            } else if (data.source === 'ai_database') {
+                debugText = `Source: Learned AI Response\nSimilarity Score: ${(data.similarity * 100).toFixed(1)}%`;
+            } else if (data.source === 'gemini') {
+                debugText = `Source: New Gemini Response\nDatabase Context Used: ${data.context_used ? 'Yes' : 'No'}\nNumber of Relevant Contexts: ${data.num_contexts}`;
+            }
+            setDebugInfo(debugText);
+
             if (data.error) {
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     type: 'ai',
-                    content: data.error // Use the error message from the response
+                    content: data.error
                 }]);
             } else {
                 setMessages(prev => [...prev, {
@@ -67,7 +80,7 @@ export default function Chat() {
                 }]);
             }
         } catch (error) {
-            // Handle network or other errors
+            console.error('Error:', error);
             setMessages(prev => [...prev, {
                 id: Date.now(),
                 type: 'ai',
@@ -101,20 +114,40 @@ export default function Chat() {
                              ? 'inset-0 md:inset-auto translate-y-0 opacity-100' 
                              : 'translate-y-8 opacity-0 pointer-events-none'}`}
             >
-                <div className="bg-[#1e2635] flex flex-col overflow-hidden h-full md:h-[500px] md:rounded-lg md:shadow-xl">
+                <div className="bg-[#1e2635] flex flex-col overflow-hidden h-full md:h-[600px] md:rounded-lg md:shadow-xl">
                     {/* Chat Header */}
                     <div className="bg-blue-500 text-white px-4 py-4 flex justify-between items-center">
                         <h2 className="text-lg font-medium flex-1 text-center">Tech Support AI Assistant</h2>
-                        <button 
-                            onClick={() => setIsChatOpen(false)}
-                            className="text-white hover:text-gray-200 focus:outline-none absolute right-2
-                                     w-8 h-8 flex items-center justify-center rounded-full
-                                     hover:bg-blue-600/50 transition-colors"
-                            aria-label="Close chat"
-                        >
-                            <FontAwesomeIcon icon={faTimes} className="text-lg" />
-                        </button>
+                        <div className="flex items-center gap-2 absolute right-2">
+                            <button 
+                                onClick={() => setShowDebug(!showDebug)}
+                                className="text-white hover:text-gray-200 focus:outline-none
+                                         w-8 h-8 flex items-center justify-center rounded-full
+                                         hover:bg-blue-600/50 transition-colors"
+                                aria-label="Toggle debug info"
+                            >
+                                <FontAwesomeIcon icon={faCode} className="text-sm" />
+                            </button>
+                            <button 
+                                onClick={() => setIsChatOpen(false)}
+                                className="text-white hover:text-gray-200 focus:outline-none
+                                         w-8 h-8 flex items-center justify-center rounded-full
+                                         hover:bg-blue-600/50 transition-colors"
+                                aria-label="Close chat"
+                            >
+                                <FontAwesomeIcon icon={faTimes} className="text-lg" />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Debug Info */}
+                    {showDebug && debugInfo && (
+                        <div className="bg-gray-900 text-gray-300 p-2 text-xs font-mono">
+                            {debugInfo.split('\n').map((line, i) => (
+                                <div key={i}>{line}</div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Chat Messages */}
                     <div 
