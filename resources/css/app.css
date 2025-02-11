@@ -20,3 +20,33 @@
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
     background-color: rgba(156, 163, 175, 0.3);
 }
+/* Remove the previous feedback styles and add these instead */
+@layer components {
+    .message-container {
+        @apply flex flex-col gap-2;
+    }
+
+    .feedback-container {
+        @apply flex flex-col gap-2 px-1;
+    }
+
+    .feedback-buttons {
+        @apply flex gap-2;
+    }
+
+    .feedback-button {
+        @apply px-3 py-1.5 rounded-md transition-colors text-sm flex items-center gap-1;
+    }
+
+    .feedback-button-helpful {
+        @apply bg-green-500/20 hover:bg-green-500/30 text-green-500;
+    }
+
+    .feedback-button-not-helpful {
+        @apply bg-red-500/20 hover:bg-red-500/30 text-red-500;
+    }
+
+    .feedback-textarea {
+        @apply w-full p-2 bg-[#2a3343] border border-gray-700 rounded-md text-sm text-gray-200 placeholder-gray-500 resize-none focus:outline-none focus:ring-1 focus:ring-red-500/50;
+    }
+}

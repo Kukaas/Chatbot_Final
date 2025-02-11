@@ -21,6 +21,11 @@ class SearchQuery(BaseModel):
     query: str
     conversation_history: list = []  # Add this field to track conversation
 
+class FeedbackData(BaseModel):
+    response_id: int
+    was_helpful: bool
+    feedback_text: str | None = None  # Make it optional with None default
+
 app = FastAPI()
 
 # Configure Gemini with explicit API key
@@ -83,7 +88,22 @@ def clean_and_normalize_text(text: str) -> str:
         'heating': 'overheating',
         'hot': 'overheating',
         'temperature': 'overheating',
-        # Add more common misspellings as needed
+        'wifi': 'wireless network',
+        'wi-fi': 'wireless network',
+        'wireless': 'wireless network',
+        'internet': 'network connection',
+        'net': 'network connection',
+        'connection': 'network connection',
+        'router': 'network device',
+        'modem': 'network device',
+        'signal': 'network signal',
+        'weak': 'poor connection',
+        'slow': 'poor performance',
+        'disconnect': 'connection loss',
+        'dropped': 'connection loss',
+        'password': 'network credentials',
+        'wpa': 'network security',
+        'wep': 'network security',
     }
     
     # Convert to lowercase and remove special characters
@@ -91,13 +111,13 @@ def clean_and_normalize_text(text: str) -> str:
     # Remove extra whitespace
     text = ' '.join(text.split())
     
-    # Replace known misspellings
+    # Replace known misspellings only if they appear as whole words
     words = text.split()
     normalized_words = []
     for word in words:
-        # Use fuzzy matching to find the closest misspelling
+        # Only replace if it's an exact match or very close match
         best_match = process.extractOne(word, misspellings.keys())
-        if best_match and best_match[1] >= 80:  # 80% similarity threshold
+        if best_match and best_match[1] >= 90:  # Increase threshold to 90%
             normalized_words.append(misspellings[best_match[0]])
         else:
             normalized_words.append(word)
@@ -257,8 +277,8 @@ def is_follow_up_question(query: str, conversation_history: list) -> tuple:
     
     return is_follow_up, is_alternative_request
 
-def calculate_similarity(embedding1, embedding2, query_text=None, match_text=None):
-    """Calculate cosine similarity between two embeddings"""
+def calculate_similarity(embedding1, embedding2, query_text=None, match_text=None, effectiveness_score=1.0):
+    """Calculate cosine similarity between two embeddings, weighted by effectiveness"""
     if isinstance(embedding2, str):
         embedding2 = json.loads(embedding2)
     vec1 = np.array(embedding1)
@@ -269,195 +289,336 @@ def calculate_similarity(embedding1, embedding2, query_text=None, match_text=Non
     
     # If we have text to compare, include text similarity
     if query_text and match_text:
-        normalized_text1 = clean_and_normalize_text(query_text)
-        normalized_text2 = clean_and_normalize_text(match_text)
-        text_similarity = fuzz.ratio(normalized_text1, normalized_text2) / 100.0
-        # Combine embedding similarity with text similarity
-        final_similarity = (similarity + text_similarity) / 2
-        return final_similarity
+        normalized_query = clean_and_normalize_text(query_text)
+        normalized_match = clean_and_normalize_text(match_text)
+        
+        # Calculate fuzzy string matching similarity
+        text_similarity = fuzz.ratio(normalized_query, normalized_match) / 100.0
+        
+        # Calculate keyword matching
+        query_keywords = set(normalized_query.split())
+        match_keywords = set(normalized_match.split())
+        
+        # Keywords grouped by category for better matching
+        important_keywords = {
+            # Network related
+            'wireless', 'network', 'wifi', 'connection', 'internet', 
+            'router', 'modem', 'signal', 'connectivity',
+            # Hardware related
+            'hardware', 'device', 'computer', 'laptop', 'desktop',
+            'screen', 'display', 'keyboard', 'mouse', 'battery',
+            'power', 'charging', 'usb', 'port', 'cable',
+            # Software related
+            'software', 'program', 'application', 'app', 'windows',
+            'mac', 'update', 'install', 'driver', 'system',
+            # Performance related
+            'slow', 'fast', 'speed', 'performance', 'memory',
+            'ram', 'cpu', 'processor', 'disk', 'storage',
+            # Error related
+            'error', 'issue', 'problem', 'fail', 'crash',
+            'freeze', 'hang', 'stop', 'break', 'bug',
+            # Status words
+            'not', 'working', 'broken', 'failed', 'dead',
+            'stuck', 'frozen', 'crashed', 'slow', 'overheating'
+        }
+        
+        # Calculate keyword overlap with extra weight for important keywords
+        common_keywords = query_keywords & match_keywords
+        important_matches = len(common_keywords & important_keywords)
+        
+        # Calculate category-based relevance
+        keyword_similarity = (len(common_keywords) + important_matches * 2) / (len(query_keywords) + len(match_keywords))
+        
+        # Combine similarities with adjusted weights
+        combined_similarity = (
+            similarity * 0.3 +          # Embedding similarity (reduced weight)
+            text_similarity * 0.3 +     # Text similarity
+            keyword_similarity * 0.4    # Keyword similarity (increased weight)
+        )
+        
+        # Weight more heavily for follow-up questions or urgent issues
+        urgency_keywords = {'not', 'working', 'failed', 'error', 'help', 'urgent', 'emergency'}
+        if any(word in normalized_query for word in urgency_keywords):
+            similarity = combined_similarity * 1.2
+        else:
+            similarity = combined_similarity
     
-    return similarity
+    # Weight by effectiveness score with higher baseline
+    weighted_similarity = similarity * (effectiveness_score / 5.0 + 0.8)
+    
+    print(f"[DEBUG] Similarity breakdown for '{match_text}':")
+    print(f"  - Embedding similarity: {similarity:.3f}")
+    if query_text and match_text:
+        print(f"  - Text similarity: {text_similarity:.3f}")
+        print(f"  - Keyword similarity: {keyword_similarity:.3f}")
+        print(f"  - Combined similarity: {combined_similarity:.3f}")
+        print(f"  - Final weighted similarity: {weighted_similarity:.3f}")
+        print(f"  - Common keywords: {common_keywords}")
+        print(f"  - Important matches: {common_keywords & important_keywords}")
+    
+    return weighted_similarity
+
+def get_conversation_context(cursor, conversation_history):
+    """Get context from conversation history"""
+    context = []
+    
+    if conversation_history:
+        # Get the last few messages
+        recent_messages = conversation_history[-3:]  # Last 3 messages
+        
+        # Get related solutions for the conversation topic
+        topic_text = " ".join(recent_messages)
+        topic_embedding = get_embedding(topic_text)
+        
+        cursor.execute("""
+            SELECT ar.solution, ar.effectiveness_score
+            FROM ai_responses ar
+            JOIN feedback f ON ar.id = f.response_id
+            WHERE f.was_helpful = TRUE
+            AND ar.effectiveness_score > 0.7
+            ORDER BY ar.effectiveness_score DESC
+            LIMIT 3
+        """)
+        
+        related_solutions = cursor.fetchall()
+        if related_solutions:
+            context.extend([sol[0] for sol in related_solutions])
+    
+    return context
 
 @app.post("/search")
 async def search(query_data: SearchQuery):
     try:
         print(f"\n[DEBUG] Processing query: {query_data.query}")
-        
-        # Normalize the query first
         normalized_query = clean_and_normalize_text(query_data.query)
-        print(f"[DEBUG] Normalized query: {normalized_query}")
-        
-        # Get query embedding using normalized query
         query_embedding = get_embedding(normalized_query)
         
-        # Initialize relevant_content list and context
-        relevant_content = []
-        context = ""
-        
-        # Analyze the question first
-        question_analysis = analyze_question(query_data.query)
-        print(f"[DEBUG] Question analysis: {question_analysis}")
-        
-        # Search for relevant content in database
-        best_match = None
-        best_similarity = 0
-        
         with get_db_cursor() as (cursor, db):
-            # First check troubleshooting_guides
-            cursor.execute("SELECT id, issue, solution, embedding FROM troubleshooting_guides")
-            guide_results = cursor.fetchall()
+            try:
+                print("\n[DEBUG] 1. Searching troubleshooting guides...")
+                cursor.execute("""
+                    SELECT id, title, content, embedding 
+                    FROM troubleshooting_guides 
+                    WHERE is_active = TRUE
+                """)
+                guide_results = cursor.fetchall()
+                print(f"[DEBUG] Found {len(guide_results)} active troubleshooting guides")
+            except mysql.connector.Error as e:
+                print(f"[DEBUG] Troubleshooting guides table not available: {e}")
+                guide_results = []
             
-            # Then check ai_responses
-            cursor.execute("SELECT id, query, issue, solution, embedding FROM ai_responses")
+            print("\n[DEBUG] 2. Searching AI responses with feedback...")
+            cursor.execute("""
+                SELECT ar.id, ar.issue, ar.solution, ar.embedding, 
+                       ar.effectiveness_score,
+                       COUNT(f.id) as feedback_count,
+                       GROUP_CONCAT(CASE 
+                           WHEN f.feedback_text IS NOT NULL 
+                           THEN CONCAT(
+                               'Feedback: ', 
+                               f.feedback_text, 
+                               ' (', CASE WHEN f.was_helpful THEN 'Helpful' ELSE 'Not Helpful' END, ')'
+                           )
+                           ELSE NULL 
+                       END SEPARATOR '\n') as feedback_texts
+                FROM ai_responses ar
+                LEFT JOIN feedback f ON ar.id = f.response_id
+                WHERE ar.effectiveness_score > 0.3  # Lowered from 0.5
+                GROUP BY ar.id
+                HAVING feedback_count = 0 OR 
+                       (feedback_count > 0 AND 
+                        SUM(CASE WHEN f.was_helpful THEN 1 ELSE 0 END) / feedback_count >= 0.4)  # Lowered from 0.6
+                ORDER BY ar.effectiveness_score DESC, feedback_count DESC
+                LIMIT 10  # Increased from 5
+            """)
             ai_results = cursor.fetchall()
+            print(f"[DEBUG] Found {len(ai_results)} relevant AI responses")
+
+            print("\n[DEBUG] 3. Combining and ranking all sources...")
+            all_sources = []
             
-            # Calculate similarities and find best match
-            for result in guide_results:
-                if result[3]:  # if embedding exists
-                    similarity = calculate_similarity(
-                        query_embedding, 
-                        result[3],
-                        query_data.query,
-                        result[1]  # issue text
-                    )
-                    print(f"[DEBUG] Guide similarity: {similarity:.2f} for issue: {result[1]}")
-                    if similarity > best_similarity:
-                        best_similarity = similarity
-                        best_match = {
-                            'source': 'guide',
-                            'issue': result[1],
-                            'solution': result[2],
-                            'similarity': similarity
-                        }
-                    if similarity > 0.5:
-                        relevant_content.append(f"Issue: {result[1]}\nSolution: {result[2]}")
-                        print(f"[DEBUG] Found relevant guide (similarity: {similarity:.2f}): {result[1]}")
-            
+            # Add guides to sources with lower threshold
+            for guide in guide_results:
+                similarity = calculate_similarity(
+                    query_embedding,
+                    json.loads(guide[3]),
+                    query_data.query,
+                    guide[1]
+                )
+                print(f"[DEBUG] Guide '{guide[1]}' similarity: {similarity:.3f}")
+                if similarity > 0.3:  # Lowered from 0.5
+                    all_sources.append({
+                        'type': 'guide',
+                        'title': guide[1],
+                        'content': guide[2],
+                        'similarity': similarity,
+                        'id': guide[0]
+                    })
+                    print(f"[DEBUG] Found matching guide: '{guide[1]}' with similarity {similarity:.3f}")
+
+            # Add AI responses to sources with lower threshold
             for result in ai_results:
-                if result[4]:  # if embedding exists
-                    similarity = calculate_similarity(
-                        query_embedding, 
-                        result[4],
-                        result[1],  # query text
-                        result[2]  # issue text
-                    )
-                    if similarity > best_similarity:
-                        best_similarity = similarity
-                        best_match = {
-                            'source': 'ai',
-                            'issue': result[2],
-                            'solution': result[3],
-                            'similarity': similarity
-                        }
-                    if similarity > 0.5:
-                        relevant_content.append(f"Previous Query: {result[1]}\nIssue: {result[2]}\nSolution: {result[3]}")
-                        print(f"[DEBUG] Found relevant AI response (similarity: {similarity:.2f}): {result[2]}")
+                similarity = calculate_similarity(
+                    query_embedding,
+                    json.loads(result[3]),
+                    query_data.query,
+                    result[1]
+                )
+                print(f"[DEBUG] AI Response '{result[1]}' similarity: {similarity:.3f}")
+                if similarity > 0.3:  # Lowered from 0.5
+                    all_sources.append({
+                        'type': 'ai_response',
+                        'issue': result[1],
+                        'solution': result[2],
+                        'similarity': similarity,
+                        'effectiveness': result[4],
+                        'feedback': result[6],
+                        'id': result[0]
+                    })
+                    print(f"[DEBUG] Found matching AI response: '{result[1]}' with similarity {similarity:.3f}")
 
-        # Lower the threshold for using existing solutions
-        if best_match and best_match['similarity'] > 0.6:  # Lower from 0.75 to 0.6
-            print(f"[DEBUG] Using existing solution from {best_match['source']} (similarity: {best_match['similarity']:.2f})")
-            return {
-                "issue": best_match['issue'],
-                "options": "Would you like to know more about this solution?",
-                "solution": best_match['solution'],
-                "source": best_match['source'],
-                "similarity": float(best_match['similarity']),
-                "type": "initial_response"
-            }
+            # Sort by similarity
+            all_sources.sort(key=lambda x: x['similarity'], reverse=True)
+            print(f"\n[DEBUG] Total matching sources found: {len(all_sources)}")
 
-        # Create context from relevant content
-        if relevant_content:
-            context = "\n\n".join(relevant_content)
-            print("[DEBUG] Using relevant content in Gemini prompt:")
-            for content in relevant_content:
-                print(f"[DEBUG] Content: {content}")
-
-        # Generate the response prompt
-        response_prompt = f"""
-        You are a friendly tech support assistant. Help the user with their technical issue.
-
-        User's question: {query_data.query}
-        {f'Previous solutions from our database:{chr(10)}{context}' if context else ''}
-
-        If relevant solutions from our database are provided above, use them as a basis for your response.
-        Adapt and expand upon these solutions rather than creating entirely new ones.
-
-        Respond naturally like a helpful tech support person. Format your response with "|||" separators:
-        1. A brief understanding of their issue
-        2. The main points we'll address
-        3. The detailed solution steps
-
-        Example:
-        I understand you're experiencing overheating issues|||Let's check these potential causes:
-        • CPU and cooling system
-        • Ventilation and airflow|||Here's what we'll do:
-        1. First step...
-        2. Second step...
-        """
-        
-        print("[DEBUG] Sending prompt to Gemini...")
-        response = gemini_model.generate_content(response_prompt)
-        generated_response = response.text
-        
-        try:
-            # Split the response into sections using the delimiter
-            sections = generated_response.split('|||')
-            if len(sections) >= 3:
-                issue = sections[0].strip()
-                options = sections[1].strip()
-                solution = sections[2].strip()
+            if all_sources:
+                print(f"[DEBUG] Best match type: {all_sources[0]['type']} with similarity: {all_sources[0]['similarity']:.3f}")
+                print(f"[DEBUG] Best match title/issue: {all_sources[0].get('title') or all_sources[0].get('issue')}")
             else:
-                # Fallback if response isn't properly formatted
-                issue = "Tech Support Response"
-                options = "Would you like more details?"
-                solution = generated_response
+                print("[DEBUG] No good matches found, falling back to Gemini")
 
-            # Store the new response in the database
-            new_embedding = get_embedding(query_data.query + " " + issue + " " + solution)
-            with get_db_cursor() as (cursor, db):
-                cursor.execute("""
-                    INSERT INTO ai_responses (query, issue, solution, embedding)
-                    VALUES (%s, %s, %s, %s)
-                """, (query_data.query, issue, solution, json.dumps(new_embedding)))
-                db.commit()
-                print("[DEBUG] Stored new AI response in database")
+            # Lower the threshold for using existing content
+            if all_sources and all_sources[0]['similarity'] > 0.4:  # Lowered from 0.6
+                # Get the best matching source
+                best_source = all_sources[0]
                 
-            return {
-                "issue": issue,
-                "options": options,
-                "solution": solution,
-                "source": "gemini",
-                "context_used": bool(relevant_content),
-                "num_contexts": len(relevant_content[:3]),
-                "type": "initial_response"
-            }
-        
-        except Exception as e:
-            print(f"[DEBUG] Error parsing Gemini response: {str(e)}")
-            issue = "Tech Support Response"
-            solution = generated_response
-            
-            # Store the unparsed response in the database
-            new_embedding = get_embedding(query_data.query + " " + issue + " " + solution)
-            with get_db_cursor() as (cursor, db):
+                # Prepare context for Gemini
+                context = f"""
+                Found relevant {best_source['type']}:
+                
+                {"Title: " + best_source['title'] if 'title' in best_source else "Issue: " + best_source['issue']}
+                {"Content: " + best_source['content'] if 'content' in best_source else "Solution: " + best_source['solution']}
+                
+                Additional context from other sources:
+                """
+                
+                # Add context from other relevant sources
+                for source in all_sources[1:3]:  # Use next 2 best matches
+                    context += f"\n- {source['type'].title()}: "
+                    context += source['title'] if 'title' in source else source['issue']
+                
+                # If we have feedback, add it
+                if 'feedback' in best_source and best_source['feedback']:
+                    context += "\n\nUser feedback from similar issues:\n"
+                    context += best_source['feedback']
+
+                # Generate enhanced response using Gemini
+                response_prompt = f"""
+                You are a tech support assistant. A user has asked: "{query_data.query}"
+
+                We have found relevant information from our database:
+                {context}
+
+                Please create a comprehensive response that:
+                1. Combines insights from all sources
+                2. Incorporates successful elements from previous solutions
+                3. Addresses the specific user query
+                4. Provides clear, step-by-step instructions
+
+                Format your response with ||| separators:
+                1. Brief understanding
+                2. Key points
+                3. Detailed solution
+                """
+
+                response = gemini_model.generate_content(response_prompt)
+                sections = response.text.split('|||')
+
+                if len(sections) >= 3:
+                    issue = sections[0].strip()
+                    options = sections[1].strip()
+                    solution = sections[2].strip()
+                else:
+                    issue = "Enhanced Solution"
+                    options = "Based on our knowledge base"
+                    solution = response.text
+
+                # Store the enhanced response
+                new_embedding = get_embedding(query_data.query + " " + issue + " " + solution)
                 cursor.execute("""
-                    INSERT INTO ai_responses (query, issue, solution, embedding)
-                    VALUES (%s, %s, %s, %s)
-                """, (query_data.query, issue, solution, json.dumps(new_embedding)))
+                    INSERT INTO ai_responses (query, issue, solution, embedding, effectiveness_score)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (query_data.query, issue, solution, json.dumps(new_embedding), 0.5))
+                
+                # Get the last inserted ID
+                cursor.execute("SELECT LAST_INSERT_ID()")
+                new_id = cursor.fetchone()[0]
                 db.commit()
-                print("[DEBUG] Stored unparsed AI response in database")
-            
-            return {
-                "issue": issue,
-                "options": "Would you like to see the full response?",
-                "solution": solution,
-                "source": "gemini",
-                "context_used": bool(relevant_content),
-                "num_contexts": len(relevant_content[:3]),
-                "type": "initial_response"
-            }
-        
-        print("[DEBUG] Received response from Gemini")
+
+                return {
+                    "issue": issue,
+                    "options": options,
+                    "solution": solution,
+                    "source": "combined",
+                    "similarity": float(best_source['similarity']) if best_source else 0.0,
+                    "type": "initial_response",
+                    "response_id": new_id
+                }
+
+            # If no good matches, fall back to Gemini
+            if not all_sources or all_sources[0]['similarity'] <= 0.4:
+                # Get conversation context
+                context = get_conversation_context(cursor, query_data.conversation_history)
+                
+                # Prepare prompt for Gemini
+                prompt = f"""
+                You are a tech support assistant. A user has asked: "{query_data.query}"
+                
+                Previous conversation context:
+                {context}
+                
+                Please provide a helpful response in the following format:
+                1. Brief understanding of the issue
+                2. Key troubleshooting steps
+                3. Detailed solution
+                
+                Use ||| as separators between sections.
+                """
+                
+                response = gemini_model.generate_content(prompt)
+                sections = response.text.split('|||')
+                
+                if len(sections) >= 3:
+                    issue = sections[0].strip()
+                    options = sections[1].strip()
+                    solution = sections[2].strip()
+                else:
+                    issue = "Tech Support Response"
+                    options = "Here are the steps to help you:"
+                    solution = response.text.strip()
+                
+                # Store the new response
+                new_embedding = get_embedding(query_data.query + " " + issue + " " + solution)
+                cursor.execute("""
+                    INSERT INTO ai_responses (query, issue, solution, embedding, effectiveness_score)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (query_data.query, issue, solution, json.dumps(new_embedding), 0.5))
+                
+                # Get the last inserted ID
+                cursor.execute("SELECT LAST_INSERT_ID()")
+                new_id = cursor.fetchone()[0]
+                db.commit()
+                
+                return {
+                    "issue": issue,
+                    "options": options,
+                    "solution": solution,
+                    "source": "gemini",
+                    "context_used": bool(context),
+                    "num_contexts": len(context) if context else 0,
+                    "type": "initial_response",
+                    "response_id": new_id
+                }
 
     except Exception as e:
         print(f"[DEBUG] Error occurred: {str(e)}")
@@ -496,6 +657,39 @@ async def generate_embedding(request: Request):
     
     embedding = get_embedding(text)
     return {"embedding": embedding}
+
+@app.post("/feedback")
+async def record_feedback(feedback: FeedbackData):
+    try:
+        with get_db_cursor() as (cursor, db):
+            # First verify the response exists
+            cursor.execute("SELECT id FROM ai_responses WHERE id = %s", (feedback.response_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Response not found")
+            
+            # Update the effectiveness score based on feedback
+            effectiveness_delta = 0.1 if feedback.was_helpful else -0.1
+            
+            cursor.execute("""
+                UPDATE ai_responses 
+                SET effectiveness_score = LEAST(GREATEST(effectiveness_score + %s, 0.1), 5.0)
+                WHERE id = %s
+            """, (effectiveness_delta, feedback.response_id))
+            
+            # Store the feedback if provided
+            cursor.execute("""
+                INSERT INTO feedback (response_id, feedback_text, was_helpful)
+                VALUES (%s, %s, %s)
+            """, (feedback.response_id, feedback.feedback_text, feedback.was_helpful))
+            
+            db.commit()
+            
+        return {"status": "success", "message": "Feedback recorded successfully"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error recording feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Startup and shutdown events
 @app.on_event("startup")

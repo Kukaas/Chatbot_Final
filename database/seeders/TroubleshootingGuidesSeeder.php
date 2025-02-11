@@ -16,104 +16,168 @@ class TroubleshootingGuidesSeeder extends Seeder
     {
         $troubleshootingData = [
             [
-                'issue' => 'Slow Performance',
-                'solution' => 'Step 1: Open Task Manager (Ctrl + Shift + Esc on Windows, or Command + Space, then type "Activity Monitor" on macOS).
-                               Step 2: Check the "Processes" tab to identify resource-intensive applications.
-                               Step 3: End tasks for unnecessary processes by selecting them and clicking "End Task" (Windows) or "Quit" (macOS).',
+                'title' => 'How to Fix Slow Computer Performance',
+                'content' => "If your computer is running slowly, follow these steps:\n\n" .
+                            "1. Open Task Manager (Ctrl + Shift + Esc on Windows, or Command + Space, then type 'Activity Monitor' on macOS)\n" .
+                            "2. Check the 'Processes' tab to identify resource-intensive applications\n" .
+                            "3. End tasks for unnecessary processes\n" .
+                            "4. Consider upgrading RAM or switching to an SSD if problems persist",
             ],
             [
-                'issue' => 'Hardware Failure',
-                'solution' => 'Step 1: Check physical connections of cables and peripherals. Ensure power cables, display cables, and other peripherals are securely connected.
-                               Step 2: Restart the computer to see if the issue persists.
-                               Step 3: If the problem continues, run hardware diagnostics. Most computers have built-in diagnostics accessed by pressing a specific key during startup (e.g., F12 for Dell, F2 for HP).',
+                'title' => 'Troubleshooting Hardware Failures',
+                'content' => "When experiencing hardware issues:\n\n" .
+                            "1. Check all physical connections (power, display, peripherals)\n" .
+                            "2. Restart the computer\n" .
+                            "3. Run hardware diagnostics (F12 for Dell, F2 for HP during startup)\n" .
+                            "4. Check device manager for error indicators",
             ],
             [
-                'issue' => 'Peripheral Connectivity',
-                'solution' => 'Step 1: Unplug and replug the peripheral device.
-                               Step 2: Try connecting the device to a different USB port or using a different cable.
-                               Step 3: Check device drivers in Device Manager (Windows) or System Information (macOS) to ensure proper installation and functionality.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Fixing USB Device Connection Problems',
+                'content' => "If a USB device isn't working:\n\n" .
+                            "1. Unplug and replug the device\n" .
+                            "2. Try different USB ports\n" .
+                            "3. Check device drivers in Device Manager/System Information\n" .
+                            "4. Test the device on another computer if possible",
             ],
             [
-                'issue' => 'Battery Drain',
-                'solution' => 'Step 1: Check battery usage statistics in device settings to identify apps consuming excessive power.
-                               Step 2: Close background apps by accessing the app switcher and swiping them away.
-                               Step 3: Disable features like location services and push notifications for apps that are not essential.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Resolving Battery Drain Issues',
+                'content' => "To improve battery life:\n\n" .
+                            "1. Check battery usage in settings\n" .
+                            "2. Close background apps\n" .
+                            "3. Disable unnecessary features (location, push notifications)\n" .
+                            "4. Consider battery replacement if issues persist",
             ],
             [
-                'issue' => 'Screen Damage',
-                'solution' => 'Step 1: Backup important data using cloud storage, computer backup software, or a data transfer cable.
-                               Step 2: Contact the device manufacturer or a certified repair center for screen replacement options.
-                               Step 3: If immediate replacement is not possible, consider using screen protectors or adhesive patches to prevent further damage.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Dealing with Screen Damage',
+                'content' => "When your screen is damaged:\n\n" .
+                            "1. Back up your data immediately\n" .
+                            "2. Contact manufacturer/certified repair center\n" .
+                            "3. Use temporary protection measures\n" .
+                            "4. Consider external display options",
             ],
             [
-                'issue' => 'Connectivity Issues',
-                'solution' => 'Step 1: Toggle Airplane Mode on/off to reset network connections.
-                               Step 2: Restart the device and router.
-                               Step 3: Reset network settings in device settings to clear any conflicting configurations.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Resolving Network Connectivity Problems',
+                'content' => "If you're having network issues:\n\n" .
+                            "1. Toggle Airplane Mode on/off\n" .
+                            "2. Restart device and router\n" .
+                            "3. Reset network settings\n" .
+                            "4. Check for IP conflicts",
             ],
             [
-                'issue' => 'Overheating',
-                'solution' => 'Step 1: Check server vents and fans for dust buildup. Use compressed air to clean if necessary.
-                               Step 2: Ensure proper airflow by organizing cables and removing obstructions around server vents.
-                               Step 3: Monitor server temperature using built-in management tools or third-party software.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Preventing and Fixing Overheating Issues',
+                'content' => "To address overheating:\n\n" .
+                            "1. Clean vents and fans with compressed air\n" .
+                            "2. Ensure proper airflow around device\n" .
+                            "3. Monitor temperature with management tools\n" .
+                            "4. Consider thermal paste replacement",
             ],
             [
-                'issue' => 'Disk Space Management',
-                'solution' => 'Step 1: Sort files by size to identify large files taking up space.
-                               Step 2: Delete temporary files, such as those in the Temp folder (Windows) or Trash (macOS).
-                               Step 3: Uninstall unused applications to free up additional space.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Managing Low Disk Space',
+                'content' => "When running out of storage:\n\n" .
+                            "1. Identify large files using disk analysis tools\n" .
+                            "2. Clear temporary files and downloads\n" .
+                            "3. Uninstall unused applications\n" .
+                            "4. Consider cloud storage options",
             ],
             [
-                'issue' => 'Slow Internet Speed',
-                'solution' => 'Step 1: Check internet speed using online speed testing tools like Speedtest.net or Fast.com.
-                               Step 2: Restart the modem and router to refresh network connections.
-                               Step 3: Contact the ISP to report slow speeds and request assistance.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Improving Slow Internet Connection',
+                'content' => "To troubleshoot slow internet:\n\n" .
+                            "1. Test speed at speedtest.net\n" .
+                            "2. Restart modem and router\n" .
+                            "3. Check for bandwidth-heavy applications\n" .
+                            "4. Contact ISP if issues persist",
             ],
             [
-                'issue' => 'Update Failures',
-                'solution' => 'Step 1: Check internet connection and ensure it\'s stable.
-                               Step 2: Clear space on the system drive if it\'s low on storage.
-                               Step 3: Manually download and install updates from the official website if automatic updates fail.',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+                'title' => 'Fixing Failed System Updates',
+                'content' => "When updates won't install:\n\n" .
+                            "1. Verify internet connection stability\n" .
+                            "2. Clear system drive space\n" .
+                            "3. Download updates manually if needed\n" .
+                            "4. Check for system file corruption",
+            ],
+            [
+                'title' => 'WiFi Connection Troubleshooting',
+                'content' => "If your WiFi is not working, follow these steps:\n\n" .
+                            "1. Check WiFi is turned on:\n" .
+                            "   - Look for WiFi icon in taskbar/menu bar\n" .
+                            "   - Check physical WiFi switch on laptop\n" .
+                            "   - Try Airplane Mode toggle\n\n" .
+                            "2. Router checks:\n" .
+                            "   - Verify router power and lights\n" .
+                            "   - Restart router (unplug for 30 seconds)\n" .
+                            "   - Check if others can connect\n\n" .
+                            "3. Device-specific steps:\n" .
+                            "   - Forget network and reconnect\n" .
+                            "   - Reset network settings\n" .
+                            "   - Update WiFi drivers\n\n" .
+                            "4. Advanced troubleshooting:\n" .
+                            "   - Check IP configuration\n" .
+                            "   - Run network diagnostics\n" .
+                            "   - Contact ISP if needed",
+            ],
+            [
+                'title' => 'Common WiFi Problems and Solutions',
+                'content' => "Common WiFi issues and their solutions:\n\n" .
+                            "1. No WiFi Connection:\n" .
+                            "   - Verify WiFi adapter is enabled\n" .
+                            "   - Check for network availability\n" .
+                            "   - Ensure correct password\n\n" .
+                            "2. Weak Signal:\n" .
+                            "   - Move closer to router\n" .
+                            "   - Remove obstacles\n" .
+                            "   - Consider WiFi extender\n\n" .
+                            "3. Intermittent Connection:\n" .
+                            "   - Update router firmware\n" .
+                            "   - Change WiFi channel\n" .
+                            "   - Check for interference\n\n" .
+                            "4. Authentication Issues:\n" .
+                            "   - Reset network credentials\n" .
+                            "   - Check security settings\n" .
+                            "   - Verify MAC filtering",
+            ],
+            [
+                'title' => 'Network Connectivity Issues',
+                'content' => "When experiencing network problems:\n\n" .
+                            "1. Basic Network Checks:\n" .
+                            "   - Verify network adapter status\n" .
+                            "   - Test multiple websites\n" .
+                            "   - Check other devices\n\n" .
+                            "2. Connection Troubleshooting:\n" .
+                            "   - Run Windows Network Diagnostics\n" .
+                            "   - Reset TCP/IP stack\n" .
+                            "   - Clear DNS cache\n\n" .
+                            "3. Hardware Verification:\n" .
+                            "   - Test with ethernet cable\n" .
+                            "   - Check router settings\n" .
+                            "   - Verify ISP status\n\n" .
+                            "4. Advanced Solutions:\n" .
+                            "   - Update network drivers\n" .
+                            "   - Check firewall settings\n" .
+                            "   - Reset network stack",
             ],
         ];
 
         foreach ($troubleshootingData as $data) {
             try {
-                // Generate embedding
-                $embedding = $this->generateEmbedding($data['issue'] . ' ' . $data['solution']);
+                // Generate embedding for both title and content
+                $embedding = $this->generateEmbedding($data['title'] . ' ' . $data['content']);
 
                 DB::table('troubleshooting_guides')->insert([
-                    'issue' => $data['issue'],
-                    'solution' => $data['solution'],
+                    'title' => $data['title'],
+                    'content' => $data['content'],
                     'embedding' => $embedding,
+                    'is_active' => true,
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now(),
                 ]);
             } catch (\Exception $e) {
-                echo "Error processing record '{$data['issue']}': {$e->getMessage()}\n";
+                echo "Error processing guide '{$data['title']}': {$e->getMessage()}\n";
             }
         }
     }
 
     private function generateEmbedding($text)
     {
-        // Call the FastAPI service to generate embeddings
         $response = Http::post('http://127.0.0.1:8000/generate-embedding', [
             'text' => $text
         ]);

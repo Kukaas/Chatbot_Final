@@ -23,6 +23,8 @@ export default function Chat() {
     const chatContainerRef = useRef(null);
     const [expandedMessages, setExpandedMessages] = useState(new Set());
     const [conversationHistory, setConversationHistory] = useState([]);
+    const [showFeedback, setShowFeedback] = useState(false);
+    const [currentResponseId, setCurrentResponseId] = useState(null);
 
     const scrollToBottom = () => {
         if (chatContainerRef.current) {
@@ -92,11 +94,17 @@ export default function Chat() {
                     content: data.error
                 }]);
             } else {
+                const responseId = data.response_id || null;
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     type: 'ai',
-                    content: data
+                    content: data,
+                    responseId: responseId
                 }]);
+                if (responseId) {
+                    setCurrentResponseId(responseId);
+                    setShowFeedback(true);
+                }
             }
         } catch (error) {
             console.error('Error:', error);
@@ -116,6 +124,168 @@ export default function Chat() {
             newSet.add(messageId);
             return newSet;
         });
+    };
+
+    const handleFeedback = async (wasHelpful, feedbackText = '') => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    response_id: currentResponseId,
+                    was_helpful: wasHelpful,
+                    feedback_text: feedbackText
+                })
+            });
+
+            if (response.ok) {
+                setShowFeedback(false);
+                setMessages(prev => [...prev, {
+                    id: Date.now(),
+                    type: 'system',
+                    content: {
+                        issue: wasHelpful ? 
+                            "Thanks for the positive feedback!" : 
+                            "Thanks for helping us improve!",
+                        solution: wasHelpful ? 
+                            "We're glad this was helpful." : 
+                            "We'll use your feedback to improve our responses."
+                    }
+                }]);
+            }
+        } catch (error) {
+            console.error('Error submitting feedback:', error);
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                type: 'system',
+                content: {
+                    issue: "Error Submitting Feedback",
+                    solution: "Sorry, we couldn't submit your feedback. Please try again later."
+                }
+            }]);
+        }
+    };
+
+    const FeedbackButtons = ({ messageId }) => {
+        const [showTextInput, setShowTextInput] = useState(false);
+        const [feedbackText, setFeedbackText] = useState('');
+        const [isSubmitting, setIsSubmitting] = useState(false);
+
+        const submitFeedback = async (wasHelpful, text = '') => {
+            if (!currentResponseId) {
+                console.error('No response ID available');
+                return;
+            }
+            
+            setIsSubmitting(true);
+            try {
+                const response = await fetch('http://127.0.0.1:8000/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        response_id: currentResponseId,
+                        was_helpful: wasHelpful,
+                        feedback_text: text || null
+                    })
+                });
+
+                if (response.ok) {
+                    setShowFeedback(false);
+                    // Add confirmation message
+                    setMessages(prev => [...prev, {
+                        id: Date.now(),
+                        type: 'system',
+                        content: {
+                            issue: wasHelpful ? 
+                                "Thanks for the positive feedback!" : 
+                                "Thanks for helping us improve!",
+                            solution: wasHelpful ? 
+                                "We're glad this was helpful." : 
+                                "We'll use your feedback to improve our responses."
+                        }
+                    }]);
+                } else {
+                    const errorData = await response.json();
+                    console.error('Feedback submission error:', errorData);
+                    throw new Error(errorData.detail || 'Failed to submit feedback');
+                }
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                setMessages(prev => [...prev, {
+                    id: Date.now(),
+                    type: 'system',
+                    content: {
+                        issue: "Error Submitting Feedback",
+                        solution: "Sorry, we couldn't submit your feedback. Please try again later."
+                    }
+                }]);
+            } finally {
+                setIsSubmitting(false);
+                setShowTextInput(false);
+            }
+        };
+
+        return (
+            <div className="mt-2 flex flex-col gap-2">
+                {!showTextInput ? (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => submitFeedback(true)}
+                            disabled={isSubmitting}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 
+                                     text-green-500 rounded-md transition-colors text-sm disabled:opacity-50"
+                        >
+                            <span>👍</span> Helpful
+                        </button>
+                        <button 
+                            onClick={() => setShowTextInput(true)}
+                            disabled={isSubmitting}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 
+                                     text-red-500 rounded-md transition-colors text-sm disabled:opacity-50"
+                        >
+                            <span>👎</span> Not Helpful
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <textarea
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            placeholder="Please tell us why this wasn't helpful..."
+                            className="w-full p-2 bg-[#2a3343] border border-gray-700 rounded-md 
+                                     text-sm text-gray-200 placeholder-gray-500 resize-none
+                                     focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                            rows="3"
+                            disabled={isSubmitting}
+                        />
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => submitFeedback(false, feedbackText)}
+                                disabled={isSubmitting}
+                                className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 
+                                         text-red-500 rounded-md transition-colors text-sm
+                                         disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                            </button>
+                            <button
+                                onClick={() => setShowTextInput(false)}
+                                disabled={isSubmitting}
+                                className="px-3 py-1.5 bg-gray-500/20 hover:bg-gray-500/30 
+                                         text-gray-400 rounded-md transition-colors text-sm
+                                         disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -184,7 +354,7 @@ export default function Chat() {
                         {messages.map(message => (
                             <div 
                                 key={message.id}
-                                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                                className={`flex flex-col ${message.type === 'user' ? 'items-end' : 'items-start'}`}
                             >
                                 <div className={`
                                     max-w-[85%] rounded-lg py-2.5 px-4
@@ -192,24 +362,31 @@ export default function Chat() {
                                         ? 'bg-blue-500 text-white' 
                                         : 'bg-[#2a3343] text-gray-100'}
                                 `}>
-                                    {message.type === 'ai' ? (
+                                    {message.type === 'system' ? (
+                                        <div className="text-sm text-gray-400">
+                                            <div className="font-medium">{message.content.issue}</div>
+                                            <div>{message.content.solution}</div>
+                                        </div>
+                                    ) : message.type === 'ai' ? (
                                         typeof message.content === 'object' ? (
-                                            <>
+                                            <div className="space-y-2">
                                                 <div className="font-semibold">{message.content.issue}</div>
                                                 {message.content.type === 'initial_response' && !expandedMessages.has(message.id) ? (
                                                     <>
-                                                        <div className="mt-2 text-gray-200">{message.content.options}</div>
+                                                        <div className="text-gray-200">{message.content.options}</div>
                                                         <button 
                                                             onClick={() => handleExpandMessage(message.id)}
-                                                            className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+                                                            className="text-blue-400 hover:text-blue-300 text-sm"
                                                         >
                                                             Show detailed solution
                                                         </button>
                                                     </>
                                                 ) : (
-                                                    <div className="mt-1 text-gray-200">{message.content.solution}</div>
+                                                    <div className="text-gray-200 whitespace-pre-wrap">
+                                                        {message.content.solution}
+                                                    </div>
                                                 )}
-                                            </>
+                                            </div>
                                         ) : (
                                             <div className="text-sm">{message.content}</div>
                                         )
@@ -217,6 +394,9 @@ export default function Chat() {
                                         <div className="text-sm">{message.content}</div>
                                     )}
                                 </div>
+                                {message.type === 'ai' && showFeedback && message.responseId === currentResponseId && (
+                                    <FeedbackButtons messageId={message.id} />
+                                )}
                             </div>
                         ))}
 
@@ -268,4 +448,4 @@ export default function Chat() {
             </div>
         </>
     );
-} 
+}

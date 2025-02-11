@@ -10,9 +10,10 @@ return new class extends Migration
     {
         Schema::create('troubleshooting_guides', function (Blueprint $table) {
             $table->id();
-            $table->string('issue');
-            $table->text('solution');
-            $table->json('embedding')->nullable(); // Changed to JSON type
+            $table->string('title');
+            $table->text('content');
+            $table->json('embedding')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
